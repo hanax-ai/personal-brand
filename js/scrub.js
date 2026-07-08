@@ -207,6 +207,8 @@ export class LiveVideoScrubber extends ScrubberBase {
     this.videoUrl = videoUrl;
     this.targetT = 0;
     this._raf = null;
+    this.isVisible = true;
+    this._observer = null;
   }
 
   async init() {
@@ -225,14 +227,22 @@ export class LiveVideoScrubber extends ScrubberBase {
     this.ready = true;
     if (this.opts.onProgress) this.opts.onProgress(1);
 
+    // Only animate when the canvas is visible
+    this._observer = new IntersectionObserver((entries) => {
+      this.isVisible = entries[0].isIntersecting;
+    }, { threshold: 0 });
+    this._observer.observe(this.canvas);
+
     const loop = () => {
-      // Lerp toward the scroll target: absorbs seek latency into motion.
-      const cur = this.video.currentTime;
-      const next = cur + (this.targetT - cur) * 0.35;
-      if (Math.abs(next - cur) > 0.005) {
-        try { this.video.currentTime = next; } catch (e) { /* seek in flight */ }
+      if (this.isVisible) {
+        // Lerp toward the scroll target: absorbs seek latency into motion.
+        const cur = this.video.currentTime;
+        const next = cur + (this.targetT - cur) * 0.35;
+        if (Math.abs(next - cur) > 0.005) {
+          try { this.video.currentTime = next; } catch (e) { /* seek in flight */ }
+        }
+        drawCover(this.ctx, this.video, this.video.videoWidth, this.video.videoHeight);
       }
-      drawCover(this.ctx, this.video, this.video.videoWidth, this.video.videoHeight);
       this._raf = requestAnimationFrame(loop);
     };
     this._raf = requestAnimationFrame(loop);
@@ -247,6 +257,7 @@ export class LiveVideoScrubber extends ScrubberBase {
   destroy() {
     super.destroy();
     if (this._raf) cancelAnimationFrame(this._raf);
+    if (this._observer) this._observer.disconnect();
   }
 }
 
